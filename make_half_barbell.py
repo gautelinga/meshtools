@@ -26,7 +26,7 @@ def barbelltube1(res):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--res', type=int,
-                        default=50, help='The raeslution ')
+                        default=50, help='The resolution ')
     parser.add_argument('--pl', action="store_true",
                         help='plot the mesh')
     args = parser.parse_args(sys.argv[1:])

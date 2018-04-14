@@ -17,6 +17,8 @@ def parse_args():
     parser.add_argument("mesh_file", type=str, help="Mesh filename")
     parser.add_argument("--reflect", action="store_true",
                         help="Reflect mesh while doubling.")
+    parser.add_argument("--axis", type=str, default="z",
+                        help="Axis to double along")
     return parser.parse_args()
 
 
@@ -89,6 +91,19 @@ def main():
     print "Node:", node.shape
     print "Elem:", elem.shape
 
+    if args.axis == "x":
+        node_map = [1, 2, 0]
+    elif args.axis == "y":
+        node_map = [2, 0, 1]
+    else:  # args.axis == "z":
+        node_map = [0, 1, 2]
+    node_map = zip(range(len(node_map)), node_map)
+
+    node_cp = np.zeros_like(node)
+    for i, j in node_map:
+        node_cp[:, i] = node[:, j]
+    node[:, :] = node_cp[:, :]
+
     node, elem = sort_mesh(node, elem)
 
     x_max = node.max(0)
@@ -109,7 +124,7 @@ def main():
 
     print len(glue_ids_old)
     print len(glue_ids_new)
-    
+
     x_old = node[glue_ids_old, :]
     x_new = node_new[glue_ids_new, :]
 
@@ -134,11 +149,15 @@ def main():
     node_out = np.vstack((node, node_new[len(glue_ids_old_out):, :]))
     elem_out = np.vstack((elem, elem_new))
 
+    node_cp = np.zeros_like(node_out)
+    for i, j in node_map:
+        node_cp[:, j] = node_out[:, i]
+    node_out[:, :] = node_cp[:, :]
+
     print "Node_out:", node_out.shape
     print "Elem_out:", elem_out.shape
 
     mesh = numpy_to_dolfin(node_out, elem_out)
-    # mesh = numpy_to_dolfin(node, elem)
 
     name_prefix = args.mesh_file.split(".h5")[0] + "_double"
 

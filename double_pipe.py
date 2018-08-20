@@ -176,7 +176,7 @@ def main():
     xdmff = df.XDMFFile(mesh.mpi_comm(),
                         name_prefix + "_show.xdmf")
     xdmff.write(mesh)
-    xdmff.close()
+    # xdmff.close()
 
 
 if __name__ == "__main__":

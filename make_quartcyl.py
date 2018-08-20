@@ -3,6 +3,7 @@ import mshr
 import matplotlib.pyplot as plt
 import sys
 import argparse
+from mpi4py import MPI
 
 
 def quartcyl(Lx, Ly, Lz, R, res):

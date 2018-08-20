@@ -1,3 +1,4 @@
+from __future__ import print_function
 import argparse
 import h5py
 import os
@@ -88,8 +89,8 @@ def main():
         node = np.array(h5f["mesh/coordinates"])
         elem = np.array(h5f["mesh/topology"])
 
-    print "Node:", node.shape
-    print "Elem:", elem.shape
+    print("Node:", node.shape)
+    print("Elem:", elem.shape)
 
     if args.axis == "x":
         node_map = [1, 2, 0]
@@ -109,6 +110,11 @@ def main():
     x_max = node.max(0)
     x_min = node.min(0)
 
+    if bool(np.sum(node[:, 2] == x_max[2]) !=
+            np.sum(node[:, 2] > x_max[2]-1e-7)):
+        print(x_max[2])
+        node[node[:, 2] > x_max[2]-1e-7, 2] = x_max[2]
+
     node_new = np.zeros_like(node)
     elem_new = np.zeros_like(elem)
     node_new[:, :] = node[:, :]
@@ -122,8 +128,8 @@ def main():
     glue_ids_old = np.argwhere(node[:, 2] == x_max[2]).flatten()
     glue_ids_new = np.argwhere(node_new[:, 2] == x_max[2]).flatten()
 
-    print len(glue_ids_old)
-    print len(glue_ids_new)
+    print(len(glue_ids_old))
+    print(len(glue_ids_new))
 
     x_old = node[glue_ids_old, :]
     x_new = node_new[glue_ids_new, :]
@@ -154,8 +160,8 @@ def main():
         node_cp[:, j] = node_out[:, i]
     node_out[:, :] = node_cp[:, :]
 
-    print "Node_out:", node_out.shape
-    print "Elem_out:", elem_out.shape
+    print("Node_out:", node_out.shape)
+    print("Elem_out:", elem_out.shape)
 
     mesh = numpy_to_dolfin(node_out, elem_out)
 

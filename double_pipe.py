@@ -50,7 +50,7 @@ def numpy_to_dolfin(nodes, elements):
                 "mesh/topology", data=elements, dtype='int64')
             coordinates = h5f.create_dataset(
                 "mesh/coordinates", data=nodes, dtype='float64')
-            topology.attrs["celltype"] = np.string_("tetrahedron")
+            topology.attrs["celltype"] = np.string_('tetrahedron')
             topology.attrs["partition"] = np.array([0], dtype='uint64')
 
     comm.Barrier()
@@ -63,7 +63,7 @@ def numpy_to_dolfin(nodes, elements):
     comm.Barrier()
     remove_safe(tmpfile)
     return mesh
-            
+
 
 def sort_mesh(node, elem):
     sortids = np.argsort(node[:, 2])
@@ -79,26 +79,14 @@ def sort_mesh(node, elem):
     return node, elem
 
 
-def main():
-    args = parse_args()
-
-    if not os.path.exists(args.mesh_file):
-        exit("Couldn't find file")
-
-    with h5py.File(args.mesh_file, "r") as h5f:
-        node = np.array(h5f["mesh/coordinates"])
-        elem = np.array(h5f["mesh/topology"])
-
-    print("Node:", node.shape)
-    print("Elem:", elem.shape)
-
-    if args.axis == "x":
+def double_mesh(node, elem, axis="z", reflect=False):
+    if axis == "x":
         node_map = [1, 2, 0]
-    elif args.axis == "y":
+    elif axis == "y":
         node_map = [2, 0, 1]
-    else:  # args.axis == "z":
+    else:  # axis == "z":
         node_map = [0, 1, 2]
-    node_map = zip(range(len(node_map)), node_map)
+    node_map = list(zip(range(len(node_map)), node_map))
 
     node_cp = np.zeros_like(node)
     for i, j in node_map:
@@ -119,7 +107,7 @@ def main():
     elem_new = np.zeros_like(elem)
     node_new[:, :] = node[:, :]
     elem_new[:, :] = elem[:, :]
-    if not args.reflect:
+    if not reflect:
         node_new[:, 2] += x_max[2]-x_min[2]
     else:
         node_new[:, 2] = 2*x_max[2]-node_new[:, 2]
@@ -149,7 +137,7 @@ def main():
 
     ids_map[len(glue_ids_old_out):] = np.arange(
         len(node), 2*len(node)-len(glue_ids_old_out))
-                                                
+
     elem_new = ids_map[elem_new.flatten()].reshape(elem_new.shape)
 
     node_out = np.vstack((node, node_new[len(glue_ids_old_out):, :]))
@@ -159,6 +147,23 @@ def main():
     for i, j in node_map:
         node_cp[:, j] = node_out[:, i]
     node_out[:, :] = node_cp[:, :]
+    return node_out, elem_out
+
+
+def main():
+    args = parse_args()
+
+    if not os.path.exists(args.mesh_file):
+        exit("Couldn't find file")
+
+    with h5py.File(args.mesh_file, "r") as h5f:
+        node = np.array(h5f["mesh/coordinates"])
+        elem = np.array(h5f["mesh/topology"])
+
+    print("Node:", node.shape)
+    print("Elem:", elem.shape)
+
+    node_out, elem_out = double_mesh(node, elem, args.axis, args.reflect)
 
     print("Node_out:", node_out.shape)
     print("Elem_out:", elem_out.shape)
@@ -176,7 +181,7 @@ def main():
     xdmff = df.XDMFFile(mesh.mpi_comm(),
                         name_prefix + "_show.xdmf")
     xdmff.write(mesh)
-    # xdmff.close()
+    xdmff.close()
 
 
 if __name__ == "__main__":

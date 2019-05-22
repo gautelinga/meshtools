@@ -6,6 +6,7 @@ import numpy as np
 import progressbar as pb
 from mpi4py import MPI
 import dolfin as df
+from common import numpy_to_dolfin
 
 
 comm = MPI.COMM_WORLD
@@ -30,39 +31,6 @@ def add_nodes(node_dict, node):
         if xtup not in node_dict:
             node_dict[xtup] = i_unique
             i_unique += 1
-
-
-def remove_safe(path):
-    """ Remove file in a safe way. """
-    if rank == 0 and os.path.exists(path):
-        os.remove(path)
-
-
-def numpy_to_dolfin(nodes, elements):
-    """ Convert nodes and elements to a dolfin mesh object. """
-    tmpfile = "tmp.h5"
-    if rank == 0:
-        with h5py.File(tmpfile, "w") as h5f:
-            cell_indices = h5f.create_dataset(
-                "mesh/cell_indices", data=np.arange(len(elements)),
-                dtype='int64')
-            topology = h5f.create_dataset(
-                "mesh/topology", data=elements, dtype='int64')
-            coordinates = h5f.create_dataset(
-                "mesh/coordinates", data=nodes, dtype='float64')
-            topology.attrs["celltype"] = np.string_('tetrahedron')
-            topology.attrs["partition"] = np.array([0], dtype='uint64')
-
-    comm.Barrier()
-
-    mesh = df.Mesh()
-    h5f = df.HDF5File(mesh.mpi_comm(), tmpfile, "r")
-    h5f.read(mesh, "mesh", False)
-    h5f.close()
-
-    comm.Barrier()
-    remove_safe(tmpfile)
-    return mesh
 
 
 def sort_mesh(node, elem):

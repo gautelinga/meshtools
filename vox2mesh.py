@@ -1,6 +1,5 @@
 import numpy as np
 import argparse
-from skimage.measure import regionprops
 import matplotlib.pyplot as plt
 from scipy import ndimage
 from matplotlib.patches import Polygon
@@ -10,25 +9,28 @@ from itertools import product
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import matplotlib.colors as mplcolors
-import meshio
+from common import numpy_to_dolfin
 import dolfin as df
+import operator
 
 
 def connected(s, ax):
     dims = list(range(len(s.shape)))
     dims.remove(ax)
-    
+
     x = np.sum(s, axis=tuple(dims)) > 0
     return x[0] & x[-1]
 
 
-def generate_cluster(N, dim):
+def generate_cluster(N, dim, p):
     size = (N,)*dim
-
+    if N == 1:
+        return np.ones(size, dtype=bool)
+    
     conn = False
     while not conn:
         R = np.random.rand(*size)
-        bw = R < 0.6
+        bw = R < p
 
         labeled, num_objects = ndimage.label(bw)
         clusters = [labeled == i for i in range(1, num_objects)]
@@ -82,7 +84,7 @@ def plot_mesh(cells, nodes):
         for face, cell in zip(boundary_faces, boundary_cells):
             face = face[[0, 1, 3, 2]]
             tri = Poly3DCollection([nodes[face]])
-            tri.set_color(mplcolors.rgb2hex(np.ones(3)*cell/np.max(boundary_cells)))
+            tri.set_color(mplcolors.rgb2hex(np.ones(3)*cell/max(1, np.max(boundary_cells))))
             tri.set_edgecolor('k')
             ax.add_collection3d(tri)
 
@@ -100,19 +102,9 @@ def compute_node_dict(nodes):
     return coord_to_id
 
 
-def reshuffle(a):
-    dim = a.shape[1]
-    b = np.zeros_like(a)
-    b[:, :] = a[:, :]
-    # for i in range(dim-1):
-    #     b[2*i, :] = a[2*i+1, :]
-    #     b[2*i+1, :] = a[2*i, :]
-    return b
-
-
 def build_cells(cell_coords, coord_to_id, dim):
-    unit_cell = reshuffle(np.array([list(reversed(el)) for el in
-                                    product([0, 1], repeat=dim)], dtype=float))
+    unit_cell = np.array([list(reversed(el)) for el in
+                          product([0, 1], repeat=dim)], dtype=float)
     cells = np.zeros((len(cell_coords), 2**dim), dtype=int)
     for i, cell_coord in enumerate(cell_coords):
         X_loc = np.array(cell_coord)*np.ones((2**dim, 1)) + unit_cell
@@ -170,36 +162,71 @@ def extract_faces(cells):
     return faces, internal_faces, external_faces, face_to_cell
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Make a periodic voxel structure.")
-    parser.add_argument("-N", type=int, default=16, help="Number of voxels")
-    parser.add_argument("-D", "--dim", type=int, default=2, help="Dimensions")
-    parser.add_argument("-A", "--axis", type=int, default=0, help="Axis")
-    args = parser.parse_args()
+def prepare_indices(ids_before, ids_after):
+    zipped = list(zip(ids_before, ids_after))
+    zipped = sorted(zipped, key=operator.itemgetter(0))
+    ids_before, ids_after = zip(*zipped)
+    ids_before = np.array(ids_before)
+    ids_after = np.array(ids_after)
+    return ids_before, ids_after
 
-    mesh_type = ["vertex", "line", "quad", "hexahedron"]
-    
-    iic = generate_cluster(args.N, args.dim)
 
-    cells, nodes, cell_coords = compute_mesh(iic)
+def condense_mesh(cells, nodes):
+    ids_before = np.unique(cells.flatten())
+    ids_after = np.array(list(range(len(ids_before))))
+    index = np.digitize(cells.ravel(), ids_before, right=True)
+    cells_out = np.sort(ids_after[index].reshape(cells.shape), axis=1)
+    nodes_out = nodes[ids_before, :]
+    return cells_out, nodes_out
 
-    dim = args.dim
+
+def convert_to_dolfin_mesh(cells, nodes):
+    dim = nodes.shape[1]
     cells_2 = np.zeros_like(cells)
     cells_2[:, :] = cells[:, :]
     for i in range(dim-1):
         cells_2[:, 4*i+2] = cells[:, 4*i+3]
         cells_2[:, 4*i+3] = cells[:, 4*i+2]
-    cells_out = {
-        mesh_type[args.dim]: cells_2
-    }
-    mesh = meshio.Mesh(nodes, cells_out)
-    meshio.write("foo.xml", mesh)
+    mesh = numpy_to_dolfin(nodes, cells_2, delete_tmp=True)
+    return mesh
 
-    m = df.Mesh("foo.xml")
-    xdmff = df.XDMFFile(m.comm_world(), "mesh.xdmf")
-    xdmff.write(m, "mesh")
-    xdmff.close()
-    
-    plot_vox(cells, nodes*args.N, cell_coords, iic)
-    plot_mesh(cells, nodes)
-    plt.show()
+
+def generate(iic):
+    cells, nodes, cell_coords = compute_mesh(iic)
+    cells, nodes = condense_mesh(cells, nodes)
+    mesh = convert_to_dolfin_mesh(cells, nodes)
+    return mesh, cells, nodes, cell_coords
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Make a periodic voxel structure.")
+    parser.add_argument("-N", type=int, default=16, help="Number of voxels")
+    parser.add_argument("-D", "--dim", type=int, default=2, help="Dimensions")
+    parser.add_argument("-A", "--axis", type=int, default=0, help="Axis")
+    parser.add_argument("--plot", action="store_true", help="Plot")
+    parser.add_argument("--xdmf", action="store_true", help="Store XDMF")
+    parser.add_argument("-o", "--outfile", type=str, default="", help="Outfile")
+    parser.add_argument("-p", type=float, default=0.5, help="Percolation probability")
+    args = parser.parse_args()
+
+    iic = generate_cluster(args.N, args.dim, args.p)
+
+    mesh, cells, nodes, cell_coords = generate(iic)
+
+    if args.outfile is not "":
+        fname = args.outfile.split(".")
+        ext = fname[-1]
+        if ext in ["h5", "hdf", "hdf5"]:
+            h5f = df.HDF5File(mesh.mpi_comm(), args.outfile, "w")
+            h5f.write(mesh, "mesh")
+            h5f.close()
+
+    if args.xdmf:
+        xdmff = df.XDMFFile(mesh.mpi_comm(), "mesh.xdmf")
+        xdmff.write(mesh)
+        xdmff.close()
+
+    if args.plot:
+        plot_vox(cells, nodes*args.N, cell_coords, iic)
+        plot_mesh(cells, nodes)
+        plt.show()

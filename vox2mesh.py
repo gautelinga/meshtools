@@ -22,7 +22,23 @@ def connected(s, ax):
     return x[0] & x[-1]
 
 
-def generate_cluster(N, dim, p):
+def get_clusters(bw, axis=0):
+    labeled, num_objects = ndimage.label(bw)
+    clusters = [labeled == i for i in range(1, num_objects)]
+    cluster_conn = [connected(cluster, axis) for cluster in clusters]
+
+    return clusters, cluster_conn
+
+
+def only_connected(clusters, cluster_conn):
+    iic = np.zeros_like(clusters[0], dtype=bool)
+    for i, cluster in enumerate(clusters):
+        if cluster_conn[i]:
+            iic[cluster] = True
+    return iic
+
+
+def generate_cluster(N, dim, p, axis=0):
     size = (N,)*dim
     if N == 1:
         return np.ones(size, dtype=bool)
@@ -32,17 +48,16 @@ def generate_cluster(N, dim, p):
         R = np.random.rand(*size)
         bw = R < p
 
-        labeled, num_objects = ndimage.label(bw)
-        clusters = [labeled == i for i in range(1, num_objects)]
-        cluster_conn = [connected(cluster, args.axis) for cluster in clusters]
-
+        clusters, cluster_conn = get_clusters(bw, axis=axis)
         conn = np.any(cluster_conn)
 
-    iic = np.zeros_like(bw, dtype=bool)
-    for i, cluster in enumerate(clusters):
-        if cluster_conn[i]:
-            iic[cluster] = True
+    iic = only_connected(clusters, cluster_conn)
     return iic
+
+
+def extract_backbone(bw, axis=0):
+    clusters, cluster_conn = get_clusters(bw, axis)
+    return only_connected(clusters, cluster_conn)
 
 
 def plot_vox(cells, nodes, cell_coords, iic):
@@ -209,7 +224,7 @@ if __name__ == "__main__":
     parser.add_argument("-p", type=float, default=0.5, help="Percolation probability")
     args = parser.parse_args()
 
-    iic = generate_cluster(args.N, args.dim, args.p)
+    iic = generate_cluster(args.N, args.dim, args.p, axis=args.axis)
 
     mesh, cells, nodes, cell_coords = generate(iic)
 

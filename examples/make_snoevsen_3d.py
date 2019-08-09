@@ -1,27 +1,10 @@
 import dolfin as df
 import numpy as np
 import mshr
-import matplotlib.pyplot as plt
 import argparse
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Make a quartermesh of 3D snoevsen.")
-    parser.add_argument("-res", type=int, default=64, help="Resolution")
-    parser.add_argument("-N", type=int, default=32, help="Number of segments")
-    parser.add_argument("-Lx", type=float, default=6., help="Lx")
-    parser.add_argument("-Ly", type=float, default=3., help="Ly")
-    parser.add_argument("-Lz", type=float, default=2., help="Lz")
-    parser.add_argument("-H", type=float, default=1., help="H")
-    parser.add_argument("-R", type=float, default=1., help="R")
-    parser.add_argument("-r", type=float, default=0.5, help="r")
-    args = parser.parse_args()
-
-    make_mesh(args.res, args.N, args.Lx, args.Ly, args.Lz,
-              args.H, args.R, args.r)
-
-
-def make_mesh(res, N, Lx, Ly, Lz, H, R, r):
+def make_quarter_snoevsen_mesh(res, N, Lx, Ly, Lz, H, R, r):
     P1 = df.Point(-Lx/2, -Ly/2, 0.)
     P2 = df.Point(0., 0., Lz)
     Pmid = df.Point(0., 0., Lz/2)
@@ -58,14 +41,31 @@ def make_mesh(res, N, Lx, Ly, Lz, H, R, r):
 
     mesh = mshr.generate_mesh(domain, res)
 
-    xdmf = df.XDMFFile("mesh.xdmf")
-    xdmf.write(mesh)
+    return mesh
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Make a quartermesh of 3D snoevsen.")
+    parser.add_argument("-res", type=int, default=64, help="Resolution")
+    parser.add_argument("-N", type=int, default=32, help="Number of segments")
+    parser.add_argument("-Lx", type=float, default=6., help="Lx")
+    parser.add_argument("-Ly", type=float, default=3., help="Ly")
+    parser.add_argument("-Lz", type=float, default=2., help="Lz")
+    parser.add_argument("-H", type=float, default=1., help="H")
+    parser.add_argument("-R", type=float, default=1., help="R")
+    parser.add_argument("-r", type=float, default=0.5, help="r")
+    args = parser.parse_args()
+
+    mesh = make_quarter_snoevsen_mesh(args.res, args.N, args.Lx,
+                                      args.Ly, args.Lz,
+                                      args.H, args.R, args.r)
+
+    with df.XDMFFile("mesh.xdmf") as xdmff:
+        xdmff.write(mesh)
 
     with df.HDF5File(mesh.mpi_comm(), "snoevsen_3d_quarter.h5", "w") as h5f:
         h5f.write(mesh, "mesh")
-
-    # df.plot(mesh)
-    # plt.show()
 
 
 if __name__ == "__main__":

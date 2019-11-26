@@ -4,15 +4,7 @@ import argparse
 from meshtools.voxels import (
     refine_voxels, get_subcluster, extract_backbone,
     voxels_to_dolfin)
-
-
-def str2num(s):
-    if s[0] == "(" and s[-1] == ")":
-        # s is tuple
-        return tuple([int(l) for l in s[1:-1].split(",")])
-    else:
-        # s is int
-        return int(s)
+from helpers import str2num
 
 
 if __name__ == "__main__":

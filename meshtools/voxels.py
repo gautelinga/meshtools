@@ -9,7 +9,7 @@ import skimage
 def grid(bounding_box, N):
     x = [np.linspace(bounding_box[dim, 0], bounding_box[dim, 1], N[dim])
          for dim in range(3)]
-    X, Y, Z = np.meshgrid(*x)
+    X, Y, Z = np.meshgrid(*x, indexing="ij")
     return X, Y, Z
 
 
@@ -30,15 +30,23 @@ def trim_voxels(a):
     return A
 
 
-def laplacian_filter(S, k):
+def laplacian_filter(S, k, periodic=False):
     S_cp = np.zeros([i+2 for i in S.shape])
     S_cp[1:-1, 1:-1, 1:-1] = S
-    S_cp[0, :, :] = S_cp[1, :, :]
-    S_cp[:, 0, :] = S_cp[:, 1, :]
-    S_cp[:, :, 0] = S_cp[:, :, 1]
-    S_cp[-1, :, :] = S_cp[-2, :, :]
-    S_cp[:, -1, :] = S_cp[:, -2, :]
-    S_cp[:, :, -1] = S_cp[:, :, -2]
+    if periodic:
+        S_cp[0, :, :] = S_cp[-2, :, :]
+        S_cp[:, 0, :] = S_cp[:, -2, :]
+        S_cp[:, :, 0] = S_cp[:, :, -2]
+        S_cp[-1, :, :] = S_cp[1, :, :]
+        S_cp[:, -1, :] = S_cp[:, 1, :]
+        S_cp[:, :, -1] = S_cp[:, :, 1]
+    else:
+        S_cp[0, :, :] = S_cp[1, :, :]
+        S_cp[:, 0, :] = S_cp[:, 1, :]
+        S_cp[:, :, 0] = S_cp[:, :, 1]
+        S_cp[-1, :, :] = S_cp[-2, :, :]
+        S_cp[:, -1, :] = S_cp[:, -2, :]
+        S_cp[:, :, -1] = S_cp[:, :, -2]
     S_cp2 = np.zeros_like(S)
     S_cp2[:, :, :] = (1-6*k)*S[:, :, :]
     S_cp2[:, :, :] += k*(S_cp[:-2, 1:-1, 1:-1]
@@ -160,9 +168,11 @@ def voxels_to_voxel_mesh(iic):
     nodes = _generate_nodes(N, dim)
     coord_to_id = _compute_node_dict(nodes)
 
-    X_cell = np.meshgrid(*(range(N),)*dim)
-    cell_coords = np.array(list(zip(*tuple([X_cell[i][iic]
-                                            for i in range(dim)]))))
+    X_cell = np.meshgrid(*(range(N),)*dim, indexing="ij")
+
+    li1 = [X_cell[d][iic] for d in range(dim)]
+    li = list(zip(*tuple(li1)))
+    cell_coords = np.array(li)
     cells = _build_cells(cell_coords, coord_to_id, dim)
     nodes = np.array(nodes)/N
     nodes, cells = condense_mesh(nodes, cells)

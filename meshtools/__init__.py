@@ -32,6 +32,7 @@ from .surface import (
     polygon_area,
     marching_cubes,
     remesh_surface,
+    clean_mesh
     )
 from .volume import (
     mesh_volume,

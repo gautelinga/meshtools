@@ -54,7 +54,15 @@ def merge_surfaces(surfaces, M=100000):
 
 
 def find_plane_edges(verts, faces, dim, pos):
-    ids_side = np.argwhere(verts[:, dim] == pos)
+    ids_side = np.argwhere(np.abs(verts[:, dim] - pos) < 1e-5)
+    print(ids_side)
+
+    import matplotlib.pyplot as plt
+    dims = list(range(3))
+    dims.pop(dim)
+    plt.scatter(verts[ids_side, dims[0]], verts[ids_side, dims[1]])
+    plt.show()
+
     side_edges = dict()
     for face in faces:
         ids_on_side = np.intersect1d(face, ids_side)
@@ -128,6 +136,7 @@ def patch_up(verts, faces, bounding_box):
     for dim, bounds in enumerate(bounding_box):
         for pos in bounds:
             side_edges = find_plane_edges(verts, faces, dim, pos)
+            print(side_edges)
             edge_lists = compute_edge_lists(side_edges)
             for edge_list in edge_lists:
                 patch = make_patch(verts, edge_list, dim, pos)
@@ -158,6 +167,45 @@ def marching_cubes(S, bounding_box):
         verts[:, dim] = (bounding_box[dim, 0] +
                          (bounding_box[dim, 1] - bounding_box[dim, 0])
                          * verts[:, dim]/(N[dim]-1))
+
+    return verts, faces
+
+
+def clean_mesh(verts, faces, bounding_box, dX):
+    dx, dy, dz = dX
+    x_min, x_max = bounding_box[0, :]
+    y_min, y_max = bounding_box[1, :]
+    z_min, z_max = bounding_box[2, :]
+
+    # Clean mesh
+    verts[verts[:, 0] < x_min + dx/2, 0] = x_min
+    verts[verts[:, 0] > x_max - dx/2, 0] = x_max
+    verts[verts[:, 1] < y_min + dy/2, 1] = y_min
+    verts[verts[:, 1] > y_max - dy/2, 1] = y_max
+    verts[verts[:, 2] < z_min + dz/2, 2] = z_min
+    verts[verts[:, 2] > z_max - dz/2, 2] = z_max
+
+    point_dict = dict()
+    for i, vert in enumerate(verts):
+        x, y, z = vert
+        if (x, y, z) in point_dict:
+            point_dict[(x, y, z)].append(i)
+        else:
+            point_dict[(x, y, z)] = [i]
+
+    for key, vals in point_dict.items():
+        if len(vals) > 1:
+            for val in vals[1:]:
+                faces[faces[:, :] == val] = vals[0]
+
+    bad_ids = set()
+    for j, face in enumerate(faces):
+        a, b, c = face
+        if (a == b) or (a == c) or (b == c):
+            bad_ids.add(j)
+
+    good_ids = list(set(range(len(faces)))-bad_ids)
+    faces = faces[good_ids, :]
     return verts, faces
 
 
@@ -165,10 +213,15 @@ def remesh_surface(verts, faces,
                    edge_size=0.025,
                    facet_angle=25.0,
                    facet_size=0.025,
-                   facet_distance=0.025):
+                   facet_distance=0.025,
+                   verbose=True):
     cells = dict(triangle=np.array(faces))
     mesh = meshio.Mesh(verts, cells)
+    if verbose:
+        print("orienting")
     mesh = pygalmesh.orient_surface_mesh(mesh)
+    if verbose:
+        print("remeshing")
     mesh = pygalmesh.remesh_surface(mesh,
                                     edge_size=edge_size,
                                     facet_angle=edge_size,
@@ -176,6 +229,8 @@ def remesh_surface(verts, faces,
                                     facet_distance=facet_distance,
                                     verbose=True)
 
+    if verbose:
+        print("orienting again")
     mesh = pygalmesh.orient_surface_mesh(mesh)
     verts = mesh.points
     faces = mesh.cells["triangle"]

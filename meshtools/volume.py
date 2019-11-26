@@ -10,13 +10,18 @@ def mesh_volume(verts, faces,
                 facet_distance=0.025,
                 cell_radius_edge_ratio=3.0,
                 cell_size=1.0,
+                feature_edges=None,
                 detect_features=True,
                 perturb=False,
                 exude=False,
                 lloyd=False,
-                odt=False):
+                odt=False,
+                verbose=True):
     cells = dict(triangle=np.array(faces))
     mesh = meshio.Mesh(verts, cells)
+
+    if verbose:
+        print("meshing volume")
     mesh = pygalmesh.generate_volume_mesh_from_surface_mesh(
         mesh,
         edge_size=edge_size,
@@ -26,11 +31,14 @@ def mesh_volume(verts, faces,
         cell_radius_edge_ratio=cell_radius_edge_ratio,
         cell_size=cell_size,
         detect_features=detect_features,
+        feature_edges=feature_edges,
         perturb=perturb,
         exude=exude,
         lloyd=lloyd,
         odt=odt,
         verbose=True)
+    if verbose:
+        print("done with that")
     verts = mesh.points
     elems = mesh.cells["tetra"]
     return verts, elems

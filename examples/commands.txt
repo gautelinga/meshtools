@@ -1,0 +1,1 @@
+python3 porous_bcc.py bcc_R0.4_res32.h5 -res 32

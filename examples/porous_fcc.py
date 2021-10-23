@@ -1,4 +1,3 @@
-from __future__ import print_function
 import argparse
 import os
 import dolfin as df
@@ -15,6 +14,7 @@ def parse_args():
     parser.add_argument("-R", type=float, default=0.4, help="Radius")
     parser.add_argument("-res", type=int, default=48, help="Resolution")
     parser.add_argument("-segments", type=int, default=100, help="Segments")
+    parser.add_argument("-reps", type=float, default=0.0, help="Radius of regularizer")
     return parser.parse_args()
 
 
@@ -28,11 +28,30 @@ def main():
 
     pt1 = df.Point(0., 0., 0.)
     pt2 = df.Point(L/2, L/2, L/2)
+    pt3 = df.Point(L/2, L/2, 0.)
+    pt4 = df.Point(L/2, 0., L/2)
+    pt5 = df.Point(0., L/2, L/2)
+    pt6 = df.Point(L/4, L/4, 0.)
+    pt7 = df.Point(L/4, 0., L/4)
+    pt8 = df.Point(0., L/4, L/4)
+    pt9 = df.Point(L/4, L/4, L/2)
+    pt10 = df.Point(L/4, L/2, L/4)
+    pt11 = df.Point(L/2, L/4, L/4)
 
     cube = mshr.Box(pt1, pt2)
     sphere1 = mshr.Sphere(pt1, R, segments=args.segments)
-    sphere2 = mshr.Sphere(pt2, R, segments=args.segments)
-    geom = cube - sphere1 - sphere2
+    sphere2 = mshr.Sphere(pt3, R, segments=args.segments)
+    sphere3 = mshr.Sphere(pt4, R, segments=args.segments)
+    sphere4 = mshr.Sphere(pt5, R, segments=args.segments)
+    geom = cube - sphere1 - sphere2 -sphere3 - sphere4
+    if args.reps > 0.:
+        sphere5 = mshr.Sphere(pt6, args.reps, segments=args.segments)
+        sphere6 = mshr.Sphere(pt7, args.reps, segments=args.segments)
+        sphere7 = mshr.Sphere(pt8, args.reps, segments=args.segments)
+        sphere8 = mshr.Sphere(pt9, args.reps, segments=args.segments)
+        sphere9 = mshr.Sphere(pt10, args.reps, segments=args.segments)
+        sphere10 = mshr.Sphere(pt1, args.reps, segments=args.segments)
+        geom = geom - sphere5 - sphere6 - sphere7 - sphere8 -sphere9 - sphere10
 
     mesh_part = mshr.generate_mesh(geom, args.res)
 

@@ -50,7 +50,7 @@ def main():
         sphere7 = mshr.Sphere(pt8, args.reps, segments=args.segments)
         sphere8 = mshr.Sphere(pt9, args.reps, segments=args.segments)
         sphere9 = mshr.Sphere(pt10, args.reps, segments=args.segments)
-        sphere10 = mshr.Sphere(pt1, args.reps, segments=args.segments)
+        sphere10 = mshr.Sphere(pt11, args.reps, segments=args.segments)
         geom = geom - sphere5 - sphere6 - sphere7 - sphere8 -sphere9 - sphere10
 
     mesh_part = mshr.generate_mesh(geom, args.res)

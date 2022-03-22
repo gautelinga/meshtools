@@ -158,3 +158,44 @@ def exude_2d_mesh_to_3d(node2d, elem2d, dz, Nz):
         node[:, 2] /= 2.
 
     return node, elem
+
+def shifted_mesh(node, elem, displacement):
+    node_out = np.copy(node)
+    elem_out = np.copy(elem)
+    for d in range(len(displacement)):
+        node_out[:, d] += displacement[d]
+    return node_out, elem_out
+
+def stack_meshes(meshes):
+    num_nodes = sum([node.shape[0] for node, elem in meshes])
+    num_elems = sum([elem.shape[0] for node, elem in meshes])
+    node_out = np.zeros((num_nodes, meshes[0][0].shape[1]))
+    elem_out = np.zeros((num_elems, meshes[0][1].shape[1]), dtype=int)
+    inode = 0
+    ielem = 0
+    for node, elem in meshes:
+        inode_next = inode+node.shape[0]
+        ielem_next = ielem+elem.shape[0]
+        node_out[inode:inode_next, :] = node[:, :]
+        elem_out[ielem:ielem_next, :] = elem[:, :] + inode
+        inode = inode_next
+        ielem = ielem_next
+
+    K = 10000
+    key2i = dict()
+    old2new = np.zeros(node_out.shape[0], dtype=int)
+    keep = np.zeros(node_out.shape[0], dtype=bool)
+    i = 0
+    for iv, v in enumerate(node_out):
+        key = tuple([int(K*vi) for vi in v])
+        if key in key2i:
+            old2new[iv] = key2i[key]
+        else:
+            key2i[key] = i
+            old2new[iv] = i
+            keep[iv] = True
+            i += 1
+    node_out = node_out[keep, :]
+    elem_out = old2new[elem_out]
+
+    return node_out, elem_out

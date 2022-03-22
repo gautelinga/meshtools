@@ -1,4 +1,3 @@
-from __future__ import print_function
 import argparse
 import os
 import dolfin as df
@@ -15,6 +14,7 @@ def parse_args():
     parser.add_argument("-R", type=float, default=0.4, help="Radius")
     parser.add_argument("-res", type=int, default=48, help="Resolution")
     parser.add_argument("-segments", type=int, default=100, help="Segments")
+    parser.add_argument("-reps", type=float, default=0.0, help="Radius of regularizer")
     return parser.parse_args()
 
 
@@ -28,11 +28,15 @@ def main():
 
     pt1 = df.Point(0., 0., 0.)
     pt2 = df.Point(L/2, L/2, L/2)
+    pt3 = df.Point(L/4, L/4, L/4)
 
     cube = mshr.Box(pt1, pt2)
     sphere1 = mshr.Sphere(pt1, R, segments=args.segments)
     sphere2 = mshr.Sphere(pt2, R, segments=args.segments)
     geom = cube - sphere1 - sphere2
+    if args.reps > 0.:
+        sphere3 = mshr.Sphere(pt3, args.reps, segments=args.segments)
+        geom -= sphere3
 
     mesh_part = mshr.generate_mesh(geom, args.res)
 

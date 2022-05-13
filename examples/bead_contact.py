@@ -30,9 +30,9 @@ def main():
     H = args.H
     R = args.R
 
-    pt_000 = df.Point(  0., Ly/2., H/2)
-    pt_111 = df.Point(Lx/2,    0.,  0.)
-    pt_001 = df.Point(  0., Ly/2.,  0.)
+    pt_000 = df.Point(    0.,     0.,    0.)
+    pt_111 = df.Point( -Lx/2, -Ly/2.,  -H/2)
+    pt_001 = df.Point(    0.,     0.,  -H/2)
 
     cube = mshr.Box(pt_000, pt_111)
     sphere = mshr.Sphere(pt_000, R, segments=args.segments)
@@ -52,7 +52,7 @@ def main():
     print("Node:", node.shape)
     print("Elem:", elem.shape)
 
-    for dim in [2]:
+    for dim in [0,1,2]:
         node, elem = double_mesh(node, elem, dim, True)
 
     print("Node_out:", node.shape)

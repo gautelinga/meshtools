@@ -170,6 +170,7 @@ def parse_args():
     parser.add_argument("--shift_x", type=float, default=0., help="Shift x")
     parser.add_argument("--shift_y", type=float, default=0., help="Shift y")
     parser.add_argument("--shift_z", type=float, default=0., help="Shift z")
+    parser.add_argument("-nt", type=int, default=4, help="Number of threads for gmsh")
     return parser.parse_args()
 
 def place_spheres(L, R, N, num_tries):
@@ -325,7 +326,7 @@ if __name__ == "__main__":
         code += generate_gmsh_code_body(x_ext, x_cnt, args.R, args.reps, args.res)
         ofile.write(code)
 
-    os.system(f"gmsh {tmpname}.geo -3")
+    os.system(f"gmsh {tmpname}.geo -3 -nt {args.nt}")
 
     mesh = meshio.read(f"{tmpname}.msh")
     meshio.write(f"{tmpname}.xdmf", mesh)

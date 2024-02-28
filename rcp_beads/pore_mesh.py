@@ -5,6 +5,25 @@ import numpy as np
 from meshtools.io import numpy_to_dolfin
 import dolfin as df
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Generate and check tube mesh using gmsh.")
+    parser.add_argument("-Lx", type=float, default=10.0, help="Length")
+    parser.add_argument("-Ly", type=float, default=10.0, help="Length")
+    parser.add_argument("-Lz", type=float, default=10.0, help="Length")
+    parser.add_argument("-R", type=float, default=0.5, help="Radius")
+    parser.add_argument("-reps", type=float, default=0.05, help="Regularised radius")
+    parser.add_argument("-N", type=int, default=10, help="Number of spheres")
+    parser.add_argument("--num_tries", type=int, default=1000, help="Number of tries")
+    parser.add_argument("-res", type=float, default=0.03, help="Resolution")
+    parser.add_argument("--show", action="store_true", help="Show (XDMF)")
+    parser.add_argument("-i", "--input", type=str, default=None, help="Input file (optional)")
+    parser.add_argument("-o", "--output", type=str, default="porous", help="Output file (optional)")
+    parser.add_argument("--shift_x", type=float, default=0., help="Shift x")
+    parser.add_argument("--shift_y", type=float, default=0., help="Shift y")
+    parser.add_argument("--shift_z", type=float, default=0., help="Shift z")
+    parser.add_argument("-nt", type=int, default=4, help="Number of threads for gmsh")
+    return parser.parse_args()
+
 gmsh_code_header = """
 Lx={L[0]};
 Ly={L[1]};
@@ -12,7 +31,7 @@ Lz={L[2]};
 x0 = 0; y0 = 0; z0 = 0;
 x = 0.; y = 0; z = 0; 
 R={R};
-eps = 1e-4;
+eps = 1e-3;
 res = {res};
 """
 
@@ -49,6 +68,7 @@ MeshSize { PointsOf{ Volume{vin()}; }} = res;
 //Mesh.MeshSizeFromCurvature = 0;
 
 Mesh.Algorithm = 6; //6
+//Mesh.Algorithm = 1;
 //Mesh.Algorithm3D = 7;
 
 """
@@ -114,7 +134,19 @@ def generate_gmsh_code_body(x_ext, x_cnt, R, r, res):
         xloc = x_cnt[i, :]
         code += f"Sphere({11+len(x_ext)+i}) = {{{xloc[0]}, {xloc[1]}, {xloc[2]}, {r}}};\n"
     
-    code += f"vin() = BooleanDifference {{ Volume{{10}}; Delete; }}{{ Volume{{11:{11+len(x_ext)+len(x_cnt)-1}}}; Delete; }};\n"
+    if True:
+        code += f"vin() = BooleanDifference {{ Volume{{10}}; Delete; }}{{ Volume{{11:{11+len(x_ext)+len(x_cnt)-1}}}; Delete; }};\n"
+    elif True:
+        code += f"vin() = BooleanIntersection {{ Volume{{11:{11+len(x_ext)+len(x_cnt)-1}}}; Delete; }}{{ Volume{{10}}; Delete; }};\n"
+    else:
+        code += f"v() = BooleanFragments {{ Volume{{10}}; Delete; }}{{ Volume{{11:{11+len(x_ext)+len(x_cnt)-1}}}; Delete; }};\n"
+        code += f"""
+    Geometry.OCCBoundsUseStl = 1;
+    vin() = Volume In BoundingBox {{x0-eps, y0-eps, z0-eps, x0+Lx+eps, y0+Ly+eps, z0+Lz+eps}};
+v() -= vin();
+Recursive Delete{{ Volume{{v()}}; }}
+"""
+
     code += gmsh_code_body_3
     code += gmsh_code_body_4
 
@@ -154,25 +186,6 @@ Background Field = 5;
 
     return code
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Generate and check tube mesh using gmsh.")
-    parser.add_argument("-Lx", type=float, default=10.0, help="Length")
-    parser.add_argument("-Ly", type=float, default=10.0, help="Length")
-    parser.add_argument("-Lz", type=float, default=10.0, help="Length")
-    parser.add_argument("-R", type=float, default=0.5, help="Radius")
-    parser.add_argument("-reps", type=float, default=0.05, help="Regularised radius")
-    parser.add_argument("-N", type=int, default=10, help="Number of spheres")
-    parser.add_argument("--num_tries", type=int, default=1000, help="Number of tries")
-    parser.add_argument("-res", type=float, default=0.03, help="Resolution")
-    parser.add_argument("--show", action="store_true", help="Show (XDMF)")
-    parser.add_argument("-i", "--input", type=str, default=None, help="Input file (optional)")
-    parser.add_argument("-o", "--output", type=str, default="porous", help="Output file (optional)")
-    parser.add_argument("--shift_x", type=float, default=0., help="Shift x")
-    parser.add_argument("--shift_y", type=float, default=0., help="Shift y")
-    parser.add_argument("--shift_z", type=float, default=0., help="Shift z")
-    parser.add_argument("-nt", type=int, default=4, help="Number of threads for gmsh")
-    return parser.parse_args()
-
 def place_spheres(L, R, N, num_tries):
     pos = []
     tries = 0
@@ -202,64 +215,35 @@ def extend_spheres(x, L, R):
     xshift = np.array([L[0], 0, 0])
     yshift = np.array([0, L[1], 0])
     zshift = np.array([0, 0, L[2]])
+    shift = [xshift, yshift, zshift]
     for xloc in x:
-        is_x_l = xloc < R
-        is_x_h = xloc > L - R
+        is_x_l = xloc < 1*R
+        is_x_h = xloc > L - 1*R
+        is_x = np.vstack([is_x_l, is_x_h])
+
         # 8 + 12 + 6 cases?
         if is_x_l.all():
-            pos_ext.append(xloc + xshift + yshift + zshift)
-        if is_x_l[0] and is_x_l[1] and is_x_h[2]:
-            pos_ext.append(xloc + xshift + yshift - zshift)
-        if is_x_l[0] and is_x_h[1] and is_x_l[2]:
-            pos_ext.append(xloc + xshift - yshift + zshift)
-        if is_x_l[0] and is_x_h[1] and is_x_h[2]:
-            pos_ext.append(xloc + xshift - yshift - zshift)
-        if is_x_h[0] and is_x_l[1] and is_x_l[2]:
-            pos_ext.append(xloc - xshift + yshift + zshift)
-        if is_x_h[0] and is_x_l[1] and is_x_h[2]:
-            pos_ext.append(xloc - xshift + yshift - zshift)
-        if is_x_h[0] and is_x_h[1] and is_x_l[2]:
-            pos_ext.append(xloc - xshift - yshift + zshift)
-        if is_x_h[0] and is_x_h[1] and is_x_h[2]:
-            pos_ext.append(xloc - xshift - yshift - zshift)
+            pos_ext.append(xloc + sum(shift))
+    
+        for k1 in range(2):
+            for k2 in range(2):
+                for k3 in range(2):
+                    if is_x[k1, 0] and is_x[k2, 1] and is_x[k3, 2]:
+                        pos_ext.append(xloc + (-1)**k1*shift[0] + (-1)**k2*shift[1] + (-1)**k3*shift[2])
 
-        if is_x_l[0] and is_x_l[1]:
-            pos_ext.append(xloc + xshift + yshift)
-        if is_x_l[0] and is_x_l[2]:
-            pos_ext.append(xloc + xshift + zshift)
-        if is_x_l[1] and is_x_l[2]:
-            pos_ext.append(xloc + yshift + zshift)
-        if is_x_l[0] and is_x_h[1]:
-            pos_ext.append(xloc + xshift - yshift)
-        if is_x_l[0] and is_x_h[2]:
-            pos_ext.append(xloc + xshift - zshift)
-        if is_x_l[1] and is_x_h[2]:
-            pos_ext.append(xloc + yshift - zshift)
-        if is_x_h[0] and is_x_l[1]:
-            pos_ext.append(xloc - xshift + yshift)
-        if is_x_h[0] and is_x_l[2]:
-            pos_ext.append(xloc - xshift + zshift)
-        if is_x_h[1] and is_x_l[2]:
-            pos_ext.append(xloc - yshift + zshift)
-        if is_x_h[0] and is_x_h[1]:
-            pos_ext.append(xloc - xshift - yshift)
-        if is_x_h[0] and is_x_h[2]:
-            pos_ext.append(xloc - xshift - zshift)
-        if is_x_h[1] and is_x_h[2]:
-            pos_ext.append(xloc - yshift - zshift)
+        for d1 in range(3):
+            for d2 in range(3):
+                if d2 != d1:
+                    for k1 in range(2):
+                        for k2 in range(2):
+                            if is_x[k1, d1] and is_x[k2, d2]:
+                                pos_ext.append(xloc + (-1)**k1 * shift[d1] + (-1)**k2 * shift[d2])
         
-        if is_x_l[0]:
-            pos_ext.append(xloc + xshift)
-        if is_x_l[1]:
-            pos_ext.append(xloc + yshift)
-        if is_x_l[2]:
-            pos_ext.append(xloc + zshift)
-        if is_x_h[0]:
-            pos_ext.append(xloc - xshift)
-        if is_x_h[1]:
-            pos_ext.append(xloc - yshift)
-        if is_x_h[2]:
-            pos_ext.append(xloc - zshift)
+        for d in range(3):
+            for k in range(2):
+                if is_x[k, d]:
+                    pos_ext.append(xloc + (-1)**k * shift[d])
+
     x_ext = np.array(pos_ext)
     return np.vstack([x, x_ext])
 
@@ -294,12 +278,15 @@ if __name__ == "__main__":
         #plt.show()
     x = xyz_shift(x, ddx, L)
 
+    x_ext = x
+
     x_ext = extend_spheres(x, L, args.R)
 
     dmat = -np.ones((len(x_ext), len(x_ext)))
     for i in range(len(x_ext)):
         for j in range(i):
             dx = x_ext[i, :] - x_ext[j, :]
+            #dx = np.minimum(dx, L - dx)
             dmat[i, j] = np.linalg.norm(dx)
     print("min dist:", dmat[dmat > 0].min())
 
@@ -326,7 +313,8 @@ if __name__ == "__main__":
         code += generate_gmsh_code_body(x_ext, x_cnt, args.R, args.reps, args.res)
         ofile.write(code)
 
-    os.system(f"gmsh {tmpname}.geo -3 -nt {args.nt}")
+    #os.system(f"gmsh {tmpname}.geo -3 -nt {args.nt}")
+    os.system(f"gmsh {tmpname}.geo -2 -nt {args.nt}")
 
     mesh = meshio.read(f"{tmpname}.msh")
     meshio.write(f"{tmpname}.xdmf", mesh)

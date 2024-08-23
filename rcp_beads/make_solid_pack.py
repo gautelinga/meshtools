@@ -45,68 +45,77 @@ def periodize(data, L, R):
 
     return np.vstack([data, *data_added])
 
-parser = argparse.ArgumentParser(description="make solid mesh")
-parser.add_argument("infile", type=str, help="Input mesh")
-parser.add_argument("-Lz", default=8, type=float, help="Lz")
-args = parser.parse_args()
+def parse_args():
+    parser = argparse.ArgumentParser(description="make solid mesh")
+    parser.add_argument("infile", type=str, help="Input mesh")
+    parser.add_argument("-Lz", default=8, type=float, help="Lz")
+    args = parser.parse_args()
+    return args
 
-num_points = 1000
+if __name__ == "__main__":
+    args = parse_args()
 
-with open(args.infile, "r") as infile:
-    Lx, Ly, Lz, R = [float(a) for a in infile.readline().split(" ")]
-    data = []
-    for line in infile.readlines():
-        data.append([float(a) for a in line[:-1].split(" ")])
-    data = np.array(data)
+    num_points = 10000
 
-data[:, 2] += (args.Lz - Lz)/2
+    with open(args.infile, "r") as infile:
+        Lx, Ly, Lz, R = [float(a) for a in infile.readline().split(" ")]
+        data = []
+        for line in infile.readlines():
+            data.append([float(a) for a in line[:-1].split(" ")])
+        data = np.array(data)
 
-data = periodize(data, [Lx, Ly, args.Lz], R)
+    data[:, 2] += (args.Lz - Lz)/2
 
-#print(pos)
-points_ = []
-tets_ = []
+    data = periodize(data, [Lx, Ly, args.Lz], R)
 
-npts = 0
+    #print(pos)
+    points_ = []
+    tets_ = []
 
-for x in data:
-    print(x)
-
-    # From MSP
+    # From MSP - one sphere
     indices = np.arange(0, num_points, dtype=float) + 0.5
     phi = np.arccos(1 - 2*indices/num_points)
     theta = np.pi * (1 + 5**0.5) * indices
 
     points = np.empty((len(indices), 3))
-    points[:, 0] = x[0] + R * (np.cos(theta) * np.sin(phi))
-    points[:, 1] = x[1] + R * (np.sin(theta) * np.sin(phi))
-    points[:, 2] = x[2] + R * np.cos(phi)
+    points[:, 0] = R * (np.cos(theta) * np.sin(phi))
+    points[:, 1] = R * (np.sin(theta) * np.sin(phi))
+    points[:, 2] = R * np.cos(phi)
 
     chull = ConvexHull(points)
     
     points, tris = chull.points, chull.simplices
-    points = np.vstack([points, x])
+    points = np.vstack([points, [0., 0., 0.]])
     
     tets = np.zeros((tris.shape[0], tris.shape[1]+1), dtype=int)
     print(points.shape, tris.shape, tets.shape)
     
     tets[:, :3] = tris
     tets[:, 3] = len(points)-1
-    
-    points_.append(points)
-    tets_.append(tets + npts)
 
-    npts += len(points)
+    npts = 0
 
-points = np.vstack(points_)
-tets = np.vstack(tets_)
+    for x in data:
+        print(x)
 
-if True:
-    #cells = [("triangle", tris)]
-    cells = [("tetra", tets)]
-    meshio.write_points_cells("sphere.xdmf", points, cells)
+        points_loc = np.copy(points[:, :])
+        for dim in range(3):
+            points_loc[:, dim] += x[dim]
+        
+        points_.append(points_loc)
+        tets_.append(tets + npts)
 
-    plt.plot(points[:, 0], points[:, 1], '.')
-    plt.show()
+        npts += len(points)
 
-    exit()
+    points = np.vstack(points_)
+    tets = np.vstack(tets_)
+
+    if True:
+        #cells = [("triangle", tris)]
+        cells = [("tetra", tets)]
+        meshio.write_points_cells("sphere.xdmf", points, cells)
+
+        plt.plot(points[:, 0], points[:, 1], '.')
+        plt.show()
+
+        exit()

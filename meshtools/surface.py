@@ -1,7 +1,6 @@
 from meshpy import triangle as tri
 import numpy as np
 from skimage import measure
-import pygalmesh
 import meshio
 
 
@@ -215,6 +214,8 @@ def remesh_surface(verts, faces,
                    facet_size=0.025,
                    facet_distance=0.025,
                    verbose=True):
+    # pygalmesh needs CGAL; import it here so the rest of meshtools works without it.
+    import pygalmesh
     cells = dict(triangle=np.array(faces))
     mesh = meshio.Mesh(verts, cells)
     if verbose:

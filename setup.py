@@ -28,7 +28,7 @@ setup(
         "h5py",
         "scipy",
         "numba",
-        "femtools @ git+https://github.com/gautelinga/femtools@626563e346eeca5c58b561fb4193edd0f2ea86a5",
+        "femtools @ git+https://github.com/gautelinga/femtools@2026.2.0",
     ],
     description="Various useful tools for meshing",
     long_description=long_description,
